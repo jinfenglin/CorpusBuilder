@@ -5,6 +5,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 import jsonlines
 import argparse
+import time
+from tqdm import tqdm
 
 
 def get_definition(driver, mag_url):
@@ -16,15 +18,18 @@ def get_definition(driver, mag_url):
     print("Page load happened")
     html = driver.page_source
     soup = BeautifulSoup(html, "html.parser")
-    definitions = [
-        x.get_text()
-        for x in soup.find("div", class_="name-section").find_all(
-            "p", text=True, recursive=False
-        )
-    ]
-    if len(definitions) == 1:
-        return definitions[0]
-    else:
+    try:
+        definitions = [
+            x.get_text()
+            for x in soup.find("div", class_="name-section").find_all(
+                "p", text=True, recursive=False
+            )
+        ]
+        if len(definitions) == 1:
+            return definitions[0]
+        else:
+            return "-1"
+    except:
         return "-1"
 
 
@@ -32,9 +37,15 @@ def get_defs_for_all_concepts(concepts, out_path):
     """
     Process the concepts one by one
     """
+    count_all = len(concepts)
     with jsonlines.open(out_path, "w") as fout:
         driver = webdriver.Chrome("./webdriver/chromedriver_win64.exe")
-        for cid in concepts:
+        count = 0
+        for cid in tqdm(concepts):
+            count += 1
+            if count % 20 == 0:
+                print(cid)
+                time.sleep(100)
             url = f"https://academic.microsoft.com/topic/{cid}/publication"
             def_str = ""
             try:
@@ -46,13 +57,12 @@ def get_defs_for_all_concepts(concepts, out_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--concept_file")
+    parser.add_argument("--concept_file", default="./data/computer_science_jinfeng.terms")
     parser.add_argument("--out_path", default="./data/concept_definition.jsonl")
     args = parser.parse_args()
     concepts = dict()
     with open(args.concept_file) as fin:
         for line in fin:
-            cid, cpt = line.strip("\n\t\r ").split(",")[:2]
+            cid, cpt = line.strip("\n\t\r ").split("\t")[:2]
             concepts[cid] = cpt
-    print(concepts)
     get_defs_for_all_concepts(concepts, out_path=args.out_path)
